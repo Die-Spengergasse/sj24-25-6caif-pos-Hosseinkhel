@@ -61,4 +61,71 @@ public class PaymentsController : ControllerBase
 
         return Ok(paymentDetail);
     }
+    [HttpPost]
+    public ActionResult CreatePayment([FromBody] NewPaymentCommand command)
+{
+    // Validate payment date
+    if (!command.IsPaymentDateTimeValid())
+    {
+        return BadRequest(ProblemDetailsFactory.CreateProblemDetails(
+            HttpContext,
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid payment date",
+            detail: "Payment date cannot be more than 1 minute in the future."));
+    }
+
+    try
+    {
+        // Find the cash desk by number
+        var cashDesk = _db.CashDesks.FirstOrDefault(c => c.Number == command.CashDeskNumber);
+        if (cashDesk == null)
+        {
+            return BadRequest(ProblemDetailsFactory.CreateProblemDetails(
+                HttpContext,
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Invalid cash desk",
+                detail: $"Cash desk with number {command.CashDeskNumber} not found."));
+        }
+
+        // Find the employee by registration number
+        var employee = _db.Employees.FirstOrDefault(e => 
+            e.RegistrationNumber == command.EmployeeRegistrationNumber);
+        if (employee == null)
+        {
+            return BadRequest(ProblemDetailsFactory.CreateProblemDetails(
+                HttpContext,
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Invalid employee",
+                detail: $"Employee with registration number {command.EmployeeRegistrationNumber} not found."));
+        }
+
+        // Parse payment type from string to enum
+        if (!Enum.TryParse<PaymentType>(command.PaymentType, true, out var paymentType))
+        {
+            return BadRequest(ProblemDetailsFactory.CreateProblemDetails(
+                HttpContext,
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Invalid payment type",
+                detail: $"Payment type '{command.PaymentType}' is not valid. Valid values are: {string.Join(", ", Enum.GetNames<PaymentType>())}"));
+        }
+
+        // Create new payment
+        var payment = new Payment(cashDesk, command.PaymentDateTime, employee, paymentType);
+        
+        // Save to database
+        _db.Payments.Add(payment);
+        _db.SaveChanges();
+
+        // Return 201 Created with payment ID
+        return CreatedAtAction(nameof(GetPayment), new { id = payment.Id }, payment.Id);
+    }
+    catch (Exception ex)
+    {
+        return BadRequest(ProblemDetailsFactory.CreateProblemDetails(
+            HttpContext,
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Error creating payment",
+            detail: ex.Message));
+    }
+}
 }
