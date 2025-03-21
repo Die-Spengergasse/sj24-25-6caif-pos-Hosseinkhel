@@ -30,6 +30,7 @@ public class PaymentsController : ControllerBase
         },
         // Weitere Dummy-Daten können hier hinzugefügt werden.
     };
+    private object _db;
 
     [HttpGet]
     public IActionResult GetPayments([FromQuery] int? cashDesk, [FromQuery] DateTime? dateFrom)
@@ -48,6 +49,58 @@ public class PaymentsController : ControllerBase
         }
 
         return Ok(result.ToList());
+    }
+
+    [HttpDelete("{id}")]
+    public ActionResult DeletePayment(int id, [FromQuery] bool deleteItems = false)
+    {
+        try
+        {
+            // Find the payment
+            var payment = _db.Payments
+                .Include(p => p.PaymentItems)
+                .FirstOrDefault(p => p.Id == id);
+
+            if (payment == null)
+            {
+                return NotFound(ProblemDetailsFactory.CreateProblemDetails(
+                    HttpContext,
+                    statusCode: StatusCodes.Status404NotFound,
+                    title: "Payment not found",
+                    detail: $"Payment with ID {id} could not be found."));
+            }
+
+            // Check if payment has items and deleteItems is false
+            if (!deleteItems && payment.PaymentItems.Any())
+            {
+                return BadRequest(ProblemDetailsFactory.CreateProblemDetails(
+                    HttpContext,
+                    statusCode: StatusCodes.Status400BadRequest,
+                    title: "Cannot delete payment",
+                    detail: "Payment has payment items."));
+            }
+
+            // If deleteItems is true, remove all payment items first
+            if (deleteItems && payment.PaymentItems.Any())
+            {
+                _db.PaymentItems.RemoveRange(payment.PaymentItems);
+            }
+
+            // Remove the payment
+            _db.Payments.Remove(payment);
+            _db.SaveChanges();
+
+            // Return 204 No Content for successful deletion
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ProblemDetailsFactory.CreateProblemDetails(
+                HttpContext,
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Error deleting payment",
+                detail: ex.Message));
+        }
     }
 
     [HttpGet("{id}")]
