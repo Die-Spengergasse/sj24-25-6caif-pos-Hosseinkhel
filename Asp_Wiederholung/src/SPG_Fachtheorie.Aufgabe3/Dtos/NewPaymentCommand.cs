@@ -1,6 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
-
-using System;
+﻿using System;
 using System.ComponentModel.DataAnnotations;
 
 namespace SPG_Fachtheorie.Aufgabe3.Dtos
@@ -16,7 +14,6 @@ namespace SPG_Fachtheorie.Aufgabe3.Dtos
 
         public int EmployeeRegistrationNumber { get; set; }
 
-        // Validation for payment date not more than 1 minute in the future
         public bool IsPaymentDateTimeValid()
         {
             return PaymentDateTime <= DateTime.Now.AddMinutes(1);
